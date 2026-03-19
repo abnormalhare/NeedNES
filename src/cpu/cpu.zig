@@ -4,6 +4,7 @@ const zsdl_ttf = @import("zsdl2_ttf");
 
 const RenderState = @import("../global.zig").RenderState;
 const ReadWrite = @import("../global.zig").ReadWrite;
+const get_bit = @import("../global.zig").get_bit;
 
 const Instructions = @import("instructions.zig");
 
@@ -30,6 +31,15 @@ const Flags = packed struct {
         return val;
     }
 
+    pub fn set_num(self: *Flags, num: u8) void {
+        self.c = get_bit(num, 0);
+        self.z = get_bit(num, 1);
+        self.i = get_bit(num, 2);
+        self.d = get_bit(num, 3);
+        self.v = get_bit(num, 6);
+        self.n = get_bit(num, 7);
+    }
+
     fn new() Flags {
         return .{
             .c = 0,
@@ -46,8 +56,9 @@ const Flags = packed struct {
 
 const Event = struct {
     timing: u3,
-    phi: u1,
-    callback: *const fn () void,
+    phase: u1,
+    callback: *const fn (*CPU) void,
+    args: []u32,
 };
 
 fn empty_func() void {}
@@ -87,7 +98,7 @@ pub const CPU = struct {
 
         // self.pc = 0xFFFC;
         // self.ir = 0x6C;
-        // self.timing = 2;
+        self.timing = 1;
         self.pc = 0xC000;
     }
 
@@ -109,23 +120,33 @@ pub const CPU = struct {
 
     // handling
 
-    fn add_event(self: *CPU, timing: u3, phase: u1, callback: *const fn () void) error{OutOfEvents}!void {
-        for (self.event) |*event| {
-            if (event) continue;
+    pub fn add_event(self: *CPU, timing: u3, phase: u1, callback: *const fn (*CPU) void, args: []u32) void {
+        for (&self.event) |*event| {
+            if (event.*) |e| {
+                _ = e;
+                continue;
+            }
 
             event.* = .{
                 .timing = timing,
                 .phase = phase,
                 .callback = callback,
+                .args = args,
             };
         } else {
-            return error.OutOfEvents;
+            std.debug.print("Whoops! We ran out of events. guess we're gonna die.\n", .{});
+            std.process.exit(0);
         }
     }
 
     // read/write
     pub fn read(self: *CPU) void {
         self.rw = .read;
+    }
+
+    pub fn read_stack(self: *CPU) void {
+        self.addr = @as(u16, self.s) + 0x100;
+        self.read();
     }
 
     pub fn read_pc(self: *CPU) void {

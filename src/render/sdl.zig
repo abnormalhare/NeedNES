@@ -124,7 +124,7 @@ pub fn notify(alloc: std.mem.Allocator, text: []u8) !void {
     if (notify_text != null) {
         alloc.free(notify_text.?);
     }
-    notify_timer = 1.5;
+    notify_timer = 1.0;
     notify_text = try alloc.dupeZ(u8, text);
     last_time = @as(f64, @floatFromInt(std.time.milliTimestamp())) / 1000.0;
 }

@@ -94,17 +94,19 @@ pub const Motherboard = struct {
 
         const writer = list.writer(alloc);
 
-        try writer.print("IR: {X:0>2} A: {X:0>2} X: {X:0>2} Y: {X:0>2}  P: {X:0>2}\n", .{
+        try writer.print("IR: {X:0>2} A: {X:0>2} X: {X:0>2} Y: {X:0>2}  P: {X:0>2}  S:{X:0>2}\n", .{
             self.cpu.ir,
             self.cpu.a,
             self.cpu.x,
             self.cpu.y,
             self.cpu.p.to_num(),
+            self.cpu.s,
         });
         try writer.print("ADDR: {X:0>4}  PC: {X:0>4}  DATA: {X:0>2}\n", .{ self.cpu.addr, self.cpu.pc, self.cpu.data });
         try writer.print("ADL: {X:0>2}  ADH: {X:0>2}\n", .{ self.cpu.adl, self.cpu.adh });
         try writer.print("TIME: {X:0>1}  PHI: {X:0>1}\n\n", .{ self.cpu.timing, self.cpu.phi });
         try writer.print("RAM: {X:0>2} {X:0>2} {X:0>2} {X:0>2} {X:0>2} {X:0>2} {X:0>2} {X:0>2}\n", .{ self.ram.data[0], self.ram.data[1], self.ram.data[2], self.ram.data[3], self.ram.data[4], self.ram.data[5], self.ram.data[6], self.ram.data[7] });
+        try writer.print("STACK: {X:0>2} {X:0>2} {X:0>2} {X:0>2} {X:0>2} {X:0>2} {X:0>2} {X:0>2}\n", .{ self.ram.data[0x1F8], self.ram.data[0x1F9], self.ram.data[0x1FA], self.ram.data[0x1FB], self.ram.data[0x1FC], self.ram.data[0x1FD], self.ram.data[0x1FE], self.ram.data[0x1FF] });
 
         return list.toOwnedSliceSentinel(alloc, 0);
     }

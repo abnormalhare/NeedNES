@@ -6,11 +6,14 @@ const get_bits = @import("../global.zig").get_bits;
 const get_bit = @import("../global.zig").get_bit;
 
 const op0 = @import("op0.zig");
+const op1 = @import("op1.zig");
 
 // helper functions
 
 pub fn op_none(self: *CPU) void {
-    _ = self;
+    if (self.timing == 2 and self.phi == 0) {
+        std.debug.print("UH OH! Skipped Opcode: {X}\n", .{self.ir});
+    }
 }
 
 pub fn op_nop(self: *CPU) void {
@@ -55,11 +58,90 @@ pub fn op_branch(self: *CPU, operation: bool) void {
 
 // BRK
 pub fn op_00(self: *CPU) void {
+    op0.timing_check(self, 7);
+
     switch (self.timing) {
         else => {},
+        2 => if (self.phi == 0) self.read_pc() else {
+            self.addr = 0x100 + @as(u16, self.s);
+            self.data = @truncate(self.pc >> 8);
+        },
+        3 => if (self.phi == 0) self.write_stack() else {
+            self.addr = 0x100 + @as(u16, self.s);
+            self.data = @truncate(self.pc);
+        },
+        4 => if (self.phi == 0) self.write_stack() else {
+            self.addr = 0x100 + @as(u16, self.s);
+            self.p.i = 1;
+            self.p.b = 1;
+            self.data = self.p.to_num();
+            self.p.b = 0;
+        },
+        5 => if (self.phi == 0) self.write_stack() else {
+            self.addr = 0xFFFE;
+        },
+        6 => if (self.phi == 0) self.read() else {
+            self.adl = self.data;
+            self.addr += 1;
+        },
+        0 => if (self.phi == 0) self.read() else {
+            self.pc = self.adl;
+            self.pc += @as(u16, self.data) << 8;
+        },
     }
 }
 
+// ORA (d,X)
+pub fn op_01(self: *CPU) void {
+    if (self.phi == 0) {
+        op0.xi_r(self);
+        return;
+    }
+
+    if (self.timing != 0) {
+        op1.indexed_indirect(self);
+        return;
+    }
+
+    self.a |= self.data;
+}
+
+// PHP
+pub fn op_08(self: *CPU) void {
+    op0.timing_check(self, 3);
+
+    switch (self.timing) {
+        else => {},
+        2 => if (self.phi == 0) self.read() else {
+            self.addr = 0x100 + @as(u16, self.s);
+            self.p.b = 1;
+            self.data = self.p.to_num();
+            self.p.b = 0;
+        },
+        0 => if (self.phi == 0) self.write_stack(),
+    }
+}
+
+pub fn op_09(self: *CPU) void {
+    if (self.phi == 0) {
+        op0.imm(self);
+        return;
+    }
+
+    if (self.timing == 0) {
+        @branchHint(.likely);
+        self.a |= self.data;
+        self.p.z = @intFromBool(self.a == 0);
+        self.p.n = get_bit(self.a, 7);
+    }
+}
+
+// BPL
+pub fn op_10(self: *CPU) void {
+    op_branch(self, self.p.n == 0);
+}
+
+// CLC
 pub fn op_18(self: *CPU) void {
     if (self.phi == 0) {
         op0.imp(self);
@@ -83,10 +165,10 @@ pub fn op_20(self: *CPU) void {
             self.addr = 0x100 + @as(u16, self.s);
         },
         3 => if (self.phi == 0) self.read() else {
-            self.data = @truncate(self.pc);
+            self.data = @truncate(self.pc >> 8);
         },
         4 => if (self.phi == 0) self.write_stack() else {
-            self.data = @truncate(self.pc >> 8);
+            self.data = @truncate(self.pc);
             self.addr = 0x100 + @as(u16, self.s);
         },
         5 => if (self.phi == 0) self.write_stack(),
@@ -117,6 +199,43 @@ pub fn op_24(self: *CPU) void {
     }
 }
 
+// PLP
+pub fn op_28(self: *CPU) void {
+    op0.timing_check(self, 4);
+
+    switch (self.timing) {
+        else => {},
+        2 => if (self.phi == 0) self.read(),
+        3 => if (self.phi == 0) self.read_stack() else {
+            self.s, _ = @addWithOverflow(self.s, 1);
+        },
+        0 => if (self.phi == 0) self.read_stack() else {
+            self.p.set_num(self.data);
+        },
+    }
+}
+
+// AND #X
+pub fn op_29(self: *CPU) void {
+    if (self.phi == 0) {
+        op0.imm(self);
+        return;
+    }
+
+    if (self.timing == 0) {
+        @branchHint(.likely);
+        self.a &= self.data;
+
+        self.p.z = @intFromBool(self.a == 0);
+        self.p.n = get_bit(self.a, 7);
+    }
+}
+
+// BMI
+pub fn op_30(self: *CPU) void {
+    op_branch(self, self.p.n == 1);
+}
+
 // SEC
 pub fn op_38(self: *CPU) void {
     if (self.phi == 0) {
@@ -127,6 +246,36 @@ pub fn op_38(self: *CPU) void {
     if (self.timing == 0) {
         @branchHint(.likely);
         self.p.c = 1;
+    }
+}
+
+// PHA
+pub fn op_48(self: *CPU) void {
+    op0.timing_check(self, 3);
+
+    switch (self.timing) {
+        else => {},
+        2 => if (self.phi == 0) self.read() else {
+            self.addr = 0x100 + @as(u16, self.s);
+            self.data = self.a;
+        },
+        0 => if (self.phi == 0) self.write_stack(),
+    }
+}
+
+// EOR #X
+pub fn op_49(self: *CPU) void {
+    if (self.phi == 0) {
+        op0.imm(self);
+        return;
+    }
+
+    if (self.timing == 0) {
+        @branchHint(.likely);
+        self.a ^= self.data;
+
+        self.p.z = @intFromBool(self.a == 0);
+        self.p.n = get_bit(self.a, 7);
     }
 }
 
@@ -149,6 +298,72 @@ pub fn op_4C(self: *CPU) void {
 // BVC
 pub fn op_50(self: *CPU) void {
     op_branch(self, self.p.v == 0);
+}
+
+// RTS
+pub fn op_60(self: *CPU) void {
+    op0.timing_check(self, 6);
+
+    switch (self.timing) {
+        else => {},
+        2 => if (self.phi == 0) self.read(),
+        3 => if (self.phi == 0) self.read_stack() else {
+            self.s, _ = @addWithOverflow(self.s, 1);
+        },
+        4 => if (self.phi == 0) self.read_stack() else {
+            self.s, _ = @addWithOverflow(self.s, 1);
+            self.pc &= 0xFF00;
+            self.pc |= self.data;
+        },
+        5 => if (self.phi == 0) self.read_stack() else {
+            self.pc &= 0x00FF;
+            self.pc |= @as(u16, self.data) << 8;
+        },
+        0 => if (self.phi == 0) self.read_pc(),
+    }
+}
+
+// PLA
+pub fn op_68(self: *CPU) void {
+    op0.timing_check(self, 4);
+
+    switch (self.timing) {
+        else => {},
+        2 => if (self.phi == 0) self.read(),
+        3 => if (self.phi == 0) self.read_stack() else {
+            self.s, _ = @addWithOverflow(self.s, 1);
+        },
+        0 => if (self.phi == 0) self.read_stack() else {
+            self.a = self.data;
+
+            self.p.z = @intFromBool(self.a == 0);
+            self.p.n = get_bit(self.a, 7);
+        },
+    }
+}
+
+// ADC #X
+pub fn op_69(self: *CPU) void {
+    if (self.phi == 0) {
+        op0.imm(self);
+        return;
+    }
+
+    if (self.timing == 0) {
+        @branchHint(.likely);
+        const res: u16 = @as(u16, self.a) + @as(u16, self.data) + @as(u16, self.p.c);
+
+        const res_sign: u1 = get_bit(@intCast(res), 7);
+        const a_sign: u1 = get_bit(@intCast(self.a), 7);
+        const data_sign: u1 = get_bit(@intCast(self.data), 7);
+
+        self.a = @truncate(res);
+
+        self.p.c = @intFromBool(res > 0xFF);
+        self.p.z = @intFromBool(self.a == 0);
+        self.p.v = @intFromBool(res_sign != a_sign and res_sign != data_sign);
+        self.p.n = get_bit(self.a, 7);
+    }
 }
 
 // JMP (AA)
@@ -183,6 +398,19 @@ pub fn op_6C(self: *CPU) void {
 // BVS
 pub fn op_70(self: *CPU) void {
     op_branch(self, self.p.v == 1);
+}
+
+// SEI
+pub fn op_78(self: *CPU) void {
+    if (self.phi == 0) {
+        op0.imp(self);
+        return;
+    }
+
+    if (self.timing == 0) {
+        @branchHint(.likely);
+        self.p.i = 1;
+    }
 }
 
 // STA X
@@ -253,9 +481,51 @@ pub fn op_B0(self: *CPU) void {
     op_branch(self, self.p.c == 1);
 }
 
+// CLV
+pub fn op_B8(self: *CPU) void {
+    if (self.phi == 0) {
+        op0.imp(self);
+        return;
+    }
+
+    if (self.timing == 0) {
+        @branchHint(.likely);
+        self.p.v = 0;
+    }
+}
+
+// CMP #X
+pub fn op_C9(self: *CPU) void {
+    if (self.phi == 0) {
+        op0.imm(self);
+        return;
+    }
+
+    if (self.timing == 0) {
+        const res: u8, _ = @subWithOverflow(self.a, self.data);
+
+        self.p.c = @intFromBool(self.a >= self.data);
+        self.p.z = @intFromBool(self.a == self.data);
+        self.p.n = get_bit(res, 7);
+    }
+}
+
 // BNE
 pub fn op_D0(self: *CPU) void {
     op_branch(self, self.p.z == 0);
+}
+
+// CLD
+pub fn op_D8(self: *CPU) void {
+    if (self.phi == 0) {
+        op0.imp(self);
+        return;
+    }
+
+    if (self.timing == 0) {
+        @branchHint(.likely);
+        self.p.d = 0;
+    }
 }
 
 // NOP
@@ -266,4 +536,17 @@ pub fn op_EA(self: *CPU) void {
 // BEQ
 pub fn op_F0(self: *CPU) void {
     op_branch(self, self.p.z == 1);
+}
+
+// SED
+pub fn op_F8(self: *CPU) void {
+    if (self.phi == 0) {
+        op0.imp(self);
+        return;
+    }
+
+    if (self.timing == 0) {
+        @branchHint(.likely);
+        self.p.d = 1;
+    }
 }

@@ -89,7 +89,8 @@ pub fn get_bits(num: u8, start: u3, end: u3) u8 {
 }
 
 pub fn get_bit(num: u8, bit: u3) u1 {
-    return @truncate(get_bits(num, bit, bit));
+    const temp = num & (@as(u8, 1) << bit);
+    return @intCast(temp >> bit);
 }
 
 pub fn interpret_nes_header(header: []const u8) MapperInfo {
