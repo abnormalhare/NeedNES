@@ -136,7 +136,7 @@ pub const Motherboard = struct {
         const debug_text = try self.generate_debug_text(alloc);
         defer alloc.free(debug_text);
 
-        const text_surface: *zsdl.Surface = try render_state.debug_font.renderTextBlendedWrapped(debug_text, WHITE, 400);
+        const text_surface: *zsdl.Surface = try render_state.debug_font.renderTextBlendedWrapped(debug_text, WHITE, 420);
         const text_texture: *zsdl.Texture = try render_state.renderer.createTextureFromSurface(text_surface);
 
         const text_rect: zsdl.Rect = .{
