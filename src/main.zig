@@ -81,7 +81,7 @@ fn run_running(alloc: std.mem.Allocator) !void {
                 try SDL.notify(alloc, notify_text);
             },
         }
-        motherboard.tick();
+        try motherboard.tick(alloc);
 
         const temp = rom_to_load.?;
 

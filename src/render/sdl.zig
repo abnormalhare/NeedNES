@@ -22,7 +22,7 @@ pub fn init(alloc: std.mem.Allocator) !RenderState {
     try zsdl_ttf.init();
     errdefer zsdl_ttf.quit();
 
-    const debug_font: *zsdl_ttf.Font = try .open("assets/Ubuntu-C.ttf", 16);
+    const debug_font: *zsdl_ttf.Font = try .open("assets/Ubuntu-C.ttf", 24);
     errdefer debug_font.close();
 
     const ret: RenderState = .{

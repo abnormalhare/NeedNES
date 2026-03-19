@@ -29,6 +29,9 @@ pub const Motherboard = struct {
     ram: RAM,
     mapper: Mapper,
 
+    file: std.fs.File,
+    old_pc: u16,
+
     pub fn power(self: *Motherboard) void {
         self.running = true;
         self.cpu.power();
@@ -78,8 +81,13 @@ pub const Motherboard = struct {
         }
     }
 
-    pub fn tick(self: *Motherboard) void {
+    pub fn tick(self: *Motherboard, alloc: std.mem.Allocator) !void {
         if (self.paused or !self.running) return;
+
+        if (self.cpu.timing == 1 and self.cpu.phi == 0) {
+            try self.generate_debug_file(alloc);
+            self.old_pc = self.cpu.pc;
+        }
 
         self.cpu.tick();
         self.subtick_update();
@@ -111,11 +119,24 @@ pub const Motherboard = struct {
         return list.toOwnedSliceSentinel(alloc, 0);
     }
 
+    pub fn generate_debug_file(self: *Motherboard, alloc: std.mem.Allocator) !void {
+        var list = try std.ArrayList(u8).initCapacity(alloc, 0x2000);
+        defer list.deinit(alloc);
+
+        const writer = list.writer(alloc);
+
+        try writer.print("{X:0>4}  ", .{self.old_pc});
+        try writer.print("A:{X:0>2} X:{X:0>2} Y:{X:0>2} P:{X:0>2} SP:{X:0>2}\n", .{ self.cpu.a, self.cpu.x, self.cpu.y, self.cpu.p.to_num(), self.cpu.s });
+
+        // output to file
+        try self.file.writeAll(list.items);
+    }
+
     pub fn render(self: *Motherboard, alloc: std.mem.Allocator, render_state: *RenderState) !void {
         const debug_text = try self.generate_debug_text(alloc);
         defer alloc.free(debug_text);
 
-        const text_surface: *zsdl.Surface = try render_state.debug_font.renderTextBlendedWrapped(debug_text, WHITE, 300);
+        const text_surface: *zsdl.Surface = try render_state.debug_font.renderTextBlendedWrapped(debug_text, WHITE, 400);
         const text_texture: *zsdl.Texture = try render_state.renderer.createTextureFromSurface(text_surface);
 
         const text_rect: zsdl.Rect = .{
@@ -168,10 +189,14 @@ pub const Motherboard = struct {
             .cpu = CPU.new(render_state, call_instruction),
             .ram = RAM.new(),
             .mapper = undefined,
+
+            .file = try std.fs.cwd().openFile("debug.txt", .{ .mode = .write_only }),
+            .old_pc = 0,
         };
     }
 
     pub fn deinit(self: *Motherboard, alloc: std.mem.Allocator) void {
         self.mapper.deinit(alloc);
+        self.file.close();
     }
 };
