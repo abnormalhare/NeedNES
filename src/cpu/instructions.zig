@@ -12,7 +12,7 @@ const op1 = @import("op1.zig");
 
 pub fn op_none(self: *CPU) void {
     if (self.timing == 2 and self.phi == 0) {
-        std.debug.print("UH OH! Skipped Opcode @ {X:0>4} : {X:0>2}\n", .{ self.pc, self.ir });
+        std.debug.print("UH OH! Skipped Opcode @ {X:0>4} : {X:0>2}\n", .{ self.pc - 1, self.ir });
     }
 }
 
@@ -107,6 +107,41 @@ pub fn op_01(self: *CPU) void {
 
     self.p.z = @intFromBool(self.a == 0);
     self.p.n = get_bit(self.a, 7);
+}
+
+// ORA X
+pub fn op_05(self: *CPU) void {
+    if (self.phi == 0) {
+        op0.z_r(self);
+        return;
+    }
+
+    if (self.timing != 0) {
+        op1.zero_page(self);
+        return;
+    }
+
+    self.a |= self.data;
+
+    self.p.z = @intFromBool(self.a == 0);
+    self.p.n = get_bit(self.a, 7);
+}
+
+// ASL X
+pub fn op_06(self: *CPU) void {
+    if (self.phi == 0) {
+        op0.z_rmw(self);
+        return;
+    }
+
+    op1.zero_page(self);
+
+    if (self.timing == 4) {
+        self.data, self.p.c = @shlWithOverflow(self.data, 1);
+
+        self.p.z = @intFromBool(self.data == 0);
+        self.p.n = get_bit(self.data, 7);
+    }
 }
 
 // PHP
@@ -225,16 +260,51 @@ pub fn op_24(self: *CPU) void {
         return;
     }
 
-    switch (self.timing) {
-        else => {},
-        2 => self.addr = @intCast(self.data),
-        0 => {
-            const check: u8 = self.a & self.data;
+    if (self.timing != 0) {
+        op1.zero_page(self);
+        return;
+    }
 
-            self.p.z = @intFromBool(check == 0);
-            self.p.v = get_bit(self.data, 6);
-            self.p.n = get_bit(self.data, 7);
-        },
+    const check: u8 = self.a & self.data;
+    self.p.z = @intFromBool(check == 0);
+    self.p.v = get_bit(self.data, 6);
+    self.p.n = get_bit(self.data, 7);
+}
+
+// AND X
+pub fn op_25(self: *CPU) void {
+    if (self.phi == 0) {
+        op0.z_r(self);
+        return;
+    }
+
+    if (self.timing != 0) {
+        op1.zero_page(self);
+        return;
+    }
+
+    self.a &= self.data;
+
+    self.p.z = @intFromBool(self.a == 0);
+    self.p.n = get_bit(self.a, 7);
+}
+
+// ROL X
+pub fn op_26(self: *CPU) void {
+    if (self.phi == 0) {
+        op0.z_rmw(self);
+        return;
+    }
+
+    op1.zero_page(self);
+
+    if (self.timing == 4) {
+        self.data, const carry = @shlWithOverflow(self.data, 1);
+        self.data += @intCast(self.p.c);
+
+        self.p.c = carry;
+        self.p.z = @intFromBool(self.data == 0);
+        self.p.n = get_bit(self.data, 7);
     }
 }
 
@@ -350,6 +420,43 @@ pub fn op_41(self: *CPU) void {
     self.p.n = get_bit(self.a, 7);
 }
 
+// EOR X
+pub fn op_45(self: *CPU) void {
+    if (self.phi == 0) {
+        op0.z_r(self);
+        return;
+    }
+
+    if (self.timing != 0) {
+        op1.zero_page(self);
+        return;
+    }
+
+    self.a ^= self.data;
+
+    self.p.z = @intFromBool(self.a == 0);
+    self.p.n = get_bit(self.a, 7);
+}
+
+// LSR X
+pub fn op_46(self: *CPU) void {
+    if (self.phi == 0) {
+        op0.z_rmw(self);
+        return;
+    }
+
+    op1.zero_page(self);
+
+    if (self.timing == 4) {
+        self.p.c = @intCast(self.data & 1);
+
+        self.data >>= 1;
+
+        self.p.z = @intFromBool(self.data == 0);
+        self.p.n = 0;
+    }
+}
+
 // PHA
 pub fn op_48(self: *CPU) void {
     op0.timing_check(self, 3);
@@ -394,7 +501,7 @@ pub fn op_4A(self: *CPU) void {
         self.a >>= 1;
 
         self.p.z = @intFromBool(self.a == 0);
-        self.p.n = get_bit(self.a, 7);
+        self.p.n = 0;
     }
 }
 
@@ -463,6 +570,49 @@ pub fn op_61(self: *CPU) void {
     self.p.z = @intFromBool(self.a == 0);
     self.p.v = @intFromBool(((self.a ^ a) & (self.a ^ self.data) & 0x80) == 0x80);
     self.p.n = get_bit(self.a, 7);
+}
+
+// ADC X
+pub fn op_65(self: *CPU) void {
+    if (self.phi == 0) {
+        op0.z_r(self);
+        return;
+    }
+
+    if (self.timing != 0) {
+        op1.zero_page(self);
+        return;
+    }
+
+    const res: u16 = @as(u16, self.a) + @as(u16, self.data) + @as(u16, self.p.c);
+    const a = self.a;
+
+    self.a = @truncate(res);
+
+    self.p.c = @intFromBool(res > 0xFF);
+    self.p.z = @intFromBool(self.a == 0);
+    self.p.v = @intFromBool(((self.a ^ a) & (self.a ^ self.data) & 0x80) == 0x80);
+    self.p.n = get_bit(self.a, 7);
+}
+
+// ROR X
+pub fn op_66(self: *CPU) void {
+    if (self.phi == 0) {
+        op0.z_rmw(self);
+        return;
+    }
+
+    op1.zero_page(self);
+
+    if (self.timing == 4) {
+        const carry: u1 = @intCast(self.data & 1);
+        self.data >>= 1;
+        self.data += @as(u8, self.p.c) * 0x80;
+
+        self.p.c = carry;
+        self.p.z = @intFromBool(self.data == 0);
+        self.p.n = get_bit(self.data, 7);
+    }
 }
 
 // PLA
@@ -593,8 +743,9 @@ pub fn op_84(self: *CPU) void {
         return;
     }
 
+    op1.zero_page(self);
+
     if (self.timing == 2) {
-        self.addr = self.data;
         self.data = self.y;
     }
 }
@@ -606,8 +757,9 @@ pub fn op_85(self: *CPU) void {
         return;
     }
 
+    op1.zero_page(self);
+
     if (self.timing == 2) {
-        self.addr = self.data;
         self.data = self.a;
     }
 }
@@ -619,8 +771,9 @@ pub fn op_86(self: *CPU) void {
         return;
     }
 
+    op1.zero_page(self);
+
     if (self.timing == 2) {
-        self.addr = self.data;
         self.data = self.x;
     }
 }
@@ -776,16 +929,15 @@ pub fn op_A4(self: *CPU) void {
         return;
     }
 
-    switch (self.timing) {
-        else => {},
-        2 => self.addr = self.data,
-        0 => {
-            self.y = self.data;
-
-            self.p.z = @intFromBool(self.y == 0);
-            self.p.n = get_bit(self.y, 7);
-        },
+    if (self.timing != 0) {
+        op1.zero_page(self);
+        return;
     }
+
+    self.y = self.data;
+
+    self.p.z = @intFromBool(self.y == 0);
+    self.p.n = get_bit(self.y, 7);
 }
 
 // LDA X
@@ -795,16 +947,15 @@ pub fn op_A5(self: *CPU) void {
         return;
     }
 
-    switch (self.timing) {
-        else => {},
-        2 => self.addr = self.data,
-        0 => {
-            self.a = self.data;
-
-            self.p.z = @intFromBool(self.a == 0);
-            self.p.n = get_bit(self.a, 7);
-        },
+    if (self.timing != 0) {
+        op1.zero_page(self);
+        return;
     }
+
+    self.a = self.data;
+
+    self.p.z = @intFromBool(self.a == 0);
+    self.p.n = get_bit(self.a, 7);
 }
 
 // LDX X
@@ -814,16 +965,15 @@ pub fn op_A6(self: *CPU) void {
         return;
     }
 
-    switch (self.timing) {
-        else => {},
-        2 => self.addr = self.data,
-        0 => {
-            self.x = self.data;
-
-            self.p.z = @intFromBool(self.x == 0);
-            self.p.n = get_bit(self.x, 7);
-        },
+    if (self.timing != 0) {
+        op1.zero_page(self);
+        return;
     }
+
+    self.x = self.data;
+
+    self.p.z = @intFromBool(self.x == 0);
+    self.p.n = get_bit(self.x, 7);
 }
 
 // TAY
@@ -885,6 +1035,9 @@ pub fn op_AD(self: *CPU) void {
 
     if (self.timing == 0) {
         self.a = self.data;
+
+        self.p.z = @intFromBool(self.a == 0);
+        self.p.n = get_bit(self.a, 7);
     }
 }
 
@@ -973,6 +1126,61 @@ pub fn op_C1(self: *CPU) void {
     self.p.c = @intFromBool(self.a >= self.data);
     self.p.z = @intFromBool(self.a == self.data);
     self.p.n = get_bit(res, 7);
+}
+
+// CPY X
+pub fn op_C4(self: *CPU) void {
+    if (self.phi == 0) {
+        op0.z_r(self);
+        return;
+    }
+
+    if (self.timing != 0) {
+        op1.zero_page(self);
+        return;
+    }
+
+    const res: u8, _ = @subWithOverflow(self.y, self.data);
+
+    self.p.c = @intFromBool(self.y >= self.data);
+    self.p.z = @intFromBool(self.y == self.data);
+    self.p.n = get_bit(res, 7);
+}
+
+// CMP X
+pub fn op_C5(self: *CPU) void {
+    if (self.phi == 0) {
+        op0.z_r(self);
+        return;
+    }
+
+    if (self.timing != 0) {
+        op1.zero_page(self);
+        return;
+    }
+
+    const res: u8, _ = @subWithOverflow(self.a, self.data);
+
+    self.p.c = @intFromBool(self.a >= self.data);
+    self.p.z = @intFromBool(self.a == self.data);
+    self.p.n = get_bit(res, 7);
+}
+
+// DEC X
+pub fn op_C6(self: *CPU) void {
+    if (self.phi == 0) {
+        op0.z_rmw(self);
+        return;
+    }
+
+    op1.zero_page(self);
+
+    if (self.timing == 4) {
+        self.data, _ = @subWithOverflow(self.data, 1);
+
+        self.p.z = @intFromBool(self.data == 0);
+        self.p.n = get_bit(self.data, 7);
+    }
 }
 
 // INY
@@ -1084,6 +1292,69 @@ pub fn op_E1(self: *CPU) void {
     self.p.z = @intFromBool(self.a == 0);
     self.p.v = @intFromBool(((self.a ^ a) & (self.a ^ ~self.data) & 0x80) == 0x80);
     self.p.n = get_bit(self.a, 7);
+}
+
+// CPX X
+pub fn op_E4(self: *CPU) void {
+    if (self.phi == 0) {
+        op0.z_r(self);
+        return;
+    }
+
+    if (self.timing != 0) {
+        op1.zero_page(self);
+        return;
+    }
+
+    const res: u8, _ = @subWithOverflow(self.x, self.data);
+
+    self.p.c = @intFromBool(self.x >= self.data);
+    self.p.z = @intFromBool(self.x == self.data);
+    self.p.n = get_bit(res, 7);
+}
+
+// SBC X
+pub fn op_E5(self: *CPU) void {
+    if (self.phi == 0) {
+        op0.z_r(self);
+        return;
+    }
+
+    if (self.timing != 0) {
+        op1.zero_page(self);
+        return;
+    }
+
+    var res: u16 = @intCast(self.a);
+    res, const uf_temp = @subWithOverflow(res, self.data);
+    res, const uf_temp2 = @subWithOverflow(res, ~self.p.c);
+
+    const underflow = uf_temp | uf_temp2;
+
+    const a = self.a;
+    self.a = @truncate(res);
+
+    self.p.c = ~underflow;
+    self.p.z = @intFromBool(self.a == 0);
+    self.p.v = @intFromBool(((self.a ^ a) & (self.a ^ ~self.data) & 0x80) == 0x80);
+    self.p.n = get_bit(self.a, 7);
+}
+
+// INC X
+pub fn op_E6(self: *CPU) void {
+    if (self.phi == 0) {
+        op0.z_rmw(self);
+        return;
+    }
+
+    op1.zero_page(self);
+
+    if (self.timing == 4) {
+        self.data, _ = @addWithOverflow(self.data, 1);
+
+        self.p.z = @intFromBool(self.data == 0);
+        self.p.n = get_bit(self.data, 7);
+    }
 }
 
 // INX

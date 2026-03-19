@@ -30,3 +30,10 @@ pub fn absolute(self: *CPU) void {
         },
     }
 }
+
+pub fn zero_page(self: *CPU) void {
+    switch (self.timing) {
+        else => {},
+        2 => self.addr = self.data,
+    }
+}
