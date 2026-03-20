@@ -71,6 +71,7 @@ pub const CPU = struct {
 
     timing: u3,
     phi: u1,
+    halt: u1,
 
     ir: u8,
 
@@ -180,6 +181,8 @@ pub const CPU = struct {
     }
 
     pub fn tick(self: *CPU) void {
+        if (self.halt == 1) return;
+
         switch (self.timing) {
             1 => self.read_ir(),
             else => self.call_instruction(self.ir, self),
@@ -195,6 +198,7 @@ pub const CPU = struct {
 
             .timing = 0,
             .phi = 0,
+            .halt = 0,
 
             .ir = 0,
 

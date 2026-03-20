@@ -20,6 +20,10 @@ pub fn op_nop(self: *CPU) void {
     op0.imp(self);
 }
 
+pub fn op_stop(self: *CPU) void {
+    self.halt = 1;
+}
+
 pub fn op_branch(self: *CPU, operation: bool) void {
     if (self.phi == 0) {
         op0.b(self);
@@ -110,6 +114,11 @@ pub fn op_01(self: *CPU) void {
 
     self.p.z = @intFromBool(self.a == 0);
     self.p.n = get_bit(self.a, 7);
+}
+
+// STP
+pub fn op_02(self: *CPU) void {
+    op_stop(self);
 }
 
 // NOP X
@@ -273,6 +282,11 @@ pub fn op_11(self: *CPU) void {
 
     self.p.z = @intFromBool(self.a == 0);
     self.p.n = get_bit(self.a, 7);
+}
+
+// STP
+pub fn op_12(self: *CPU) void {
+    op_stop(self);
 }
 
 // NOP X,X
@@ -442,6 +456,11 @@ pub fn op_21(self: *CPU) void {
 
     self.p.z = @intFromBool(self.a == 0);
     self.p.n = get_bit(self.a, 7);
+}
+
+// STP
+pub fn op_22(self: *CPU) void {
+    op_stop(self);
 }
 
 // BIT X
@@ -625,6 +644,11 @@ pub fn op_31(self: *CPU) void {
     self.p.n = get_bit(self.a, 7);
 }
 
+// STP
+pub fn op_32(self: *CPU) void {
+    op_stop(self);
+}
+
 // NOP X,X
 pub fn op_34(self: *CPU) void {
     if (self.phi == 0) {
@@ -797,6 +821,11 @@ pub fn op_41(self: *CPU) void {
 
     self.p.z = @intFromBool(self.a == 0);
     self.p.n = get_bit(self.a, 7);
+}
+
+// STP
+pub fn op_42(self: *CPU) void {
+    op_stop(self);
 }
 
 // NOP X
@@ -972,6 +1001,11 @@ pub fn op_51(self: *CPU) void {
     self.p.n = get_bit(self.a, 7);
 }
 
+// STP
+pub fn op_52(self: *CPU) void {
+    op_stop(self);
+}
+
 // NOP X,X
 pub fn op_54(self: *CPU) void {
     if (self.phi == 0) {
@@ -1133,6 +1167,11 @@ pub fn op_61(self: *CPU) void {
     self.p.z = @intFromBool(self.a == 0);
     self.p.v = @intFromBool(((self.a ^ a) & (self.a ^ self.data) & 0x80) == 0x80);
     self.p.n = get_bit(self.a, 7);
+}
+
+// STP
+pub fn op_62(self: *CPU) void {
+    op_stop(self);
 }
 
 // NOP X
@@ -1351,6 +1390,11 @@ pub fn op_71(self: *CPU) void {
     self.p.z = @intFromBool(self.a == 0);
     self.p.v = @intFromBool(((self.a ^ a) & (self.a ^ self.data) & 0x80) == 0x80);
     self.p.n = get_bit(self.a, 7);
+}
+
+// STP
+pub fn op_72(self: *CPU) void {
+    op_stop(self);
 }
 
 // NOP X,X
@@ -1652,6 +1696,11 @@ pub fn op_91(self: *CPU) void {
     if (self.timing == 5) {
         self.data = self.a;
     }
+}
+
+// STP
+pub fn op_92(self: *CPU) void {
+    op_stop(self);
 }
 
 // STY X,X
@@ -1977,6 +2026,11 @@ pub fn op_B1(self: *CPU) void {
 
     self.p.z = @intFromBool(self.a == 0);
     self.p.n = get_bit(self.a, 7);
+}
+
+// STP
+pub fn op_B2(self: *CPU) void {
+    op_stop(self);
 }
 
 // LDY X,X
@@ -2349,6 +2403,11 @@ pub fn op_D1(self: *CPU) void {
     self.p.c = @intFromBool(self.a >= self.data);
     self.p.z = @intFromBool(self.a == self.data);
     self.p.n = get_bit(res, 7);
+}
+
+// STP
+pub fn op_D2(self: *CPU) void {
+    op_stop(self);
 }
 
 // NOP X,X
@@ -2725,6 +2784,11 @@ pub fn op_F1(self: *CPU) void {
     self.p.z = @intFromBool(self.a == 0);
     self.p.v = @intFromBool(((self.a ^ a) & (self.a ^ ~self.data) & 0x80) == 0x80);
     self.p.n = get_bit(self.a, 7);
+}
+
+// STP
+pub fn op_F2(self: *CPU) void {
+    op_stop(self);
 }
 
 // NOP X,X
