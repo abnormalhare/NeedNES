@@ -99,10 +99,9 @@ fn run_running(alloc: std.mem.Allocator) !void {
             app_state = .Idle;
         }
 
-        // if (motherboard.cpu.addr == 0xE1C1) {
+        // if (motherboard.cpu.addr == 0xC72A) {
         //     motherboard.pause();
-        // }
-
+        // } else
         switch (motherboard.tick_type) {
             .none => {},
             .instr => if (motherboard.cpu.timing == 2 and motherboard.cpu.phi == 0) motherboard.pause(),
