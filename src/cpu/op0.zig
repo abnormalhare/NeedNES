@@ -125,7 +125,7 @@ pub fn zi_w(self: *CPU) void {
         else => {},
         2 => self.read_pc(),
         3 => self.read(),
-        4 => self.write(),
+        0 => self.write(),
     }
 }
 

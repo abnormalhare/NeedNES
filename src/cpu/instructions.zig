@@ -249,6 +249,41 @@ pub fn op_11(self: *CPU) void {
     self.p.n = get_bit(self.a, 7);
 }
 
+// ORA X,X
+pub fn op_15(self: *CPU) void {
+    if (self.phi == 0) {
+        op0.zi_r(self);
+        return;
+    }
+
+    if (self.timing != 0) {
+        op1.zero_page_indexed(self, .x);
+        return;
+    }
+
+    self.a |= self.data;
+
+    self.p.z = @intFromBool(self.a == 0);
+    self.p.n = get_bit(self.a, 7);
+}
+
+// ASL, X,X
+pub fn op_16(self: *CPU) void {
+    if (self.phi == 0) {
+        op0.zi_rmw(self);
+        return;
+    }
+
+    op1.zero_page_indexed(self, .x);
+
+    if (self.timing == 5) {
+        self.data, self.p.c = @shlWithOverflow(self.data, 1);
+
+        self.p.z = @intFromBool(self.data == 0);
+        self.p.n = get_bit(self.data, 7);
+    }
+}
+
 // CLC
 pub fn op_18(self: *CPU) void {
     if (self.phi == 0) {
@@ -504,6 +539,43 @@ pub fn op_31(self: *CPU) void {
     self.p.n = get_bit(self.a, 7);
 }
 
+// AND X,X
+pub fn op_35(self: *CPU) void {
+    if (self.phi == 0) {
+        op0.zi_r(self);
+        return;
+    }
+
+    if (self.timing != 0) {
+        op1.zero_page_indexed(self, .x);
+        return;
+    }
+
+    self.a &= self.data;
+
+    self.p.z = @intFromBool(self.a == 0);
+    self.p.n = get_bit(self.a, 7);
+}
+
+// ROL, X,X
+pub fn op_36(self: *CPU) void {
+    if (self.phi == 0) {
+        op0.zi_rmw(self);
+        return;
+    }
+
+    op1.zero_page_indexed(self, .x);
+
+    if (self.timing == 5) {
+        self.data, const carry = @shlWithOverflow(self.data, 1);
+        self.data += @intCast(self.p.c);
+
+        self.p.c = carry;
+        self.p.z = @intFromBool(self.data == 0);
+        self.p.n = get_bit(self.data, 7);
+    }
+}
+
 // SEC
 pub fn op_38(self: *CPU) void {
     if (self.phi == 0) {
@@ -737,6 +809,43 @@ pub fn op_51(self: *CPU) void {
 
     self.p.z = @intFromBool(self.a == 0);
     self.p.n = get_bit(self.a, 7);
+}
+
+// EOR X,X
+pub fn op_55(self: *CPU) void {
+    if (self.phi == 0) {
+        op0.zi_r(self);
+        return;
+    }
+
+    if (self.timing != 0) {
+        op1.zero_page_indexed(self, .x);
+        return;
+    }
+
+    self.a ^= self.data;
+
+    self.p.z = @intFromBool(self.a == 0);
+    self.p.n = get_bit(self.a, 7);
+}
+
+// LSR, X,X
+pub fn op_56(self: *CPU) void {
+    if (self.phi == 0) {
+        op0.zi_rmw(self);
+        return;
+    }
+
+    op1.zero_page_indexed(self, .x);
+
+    if (self.timing == 5) {
+        self.p.c = @intCast(self.data & 1);
+
+        self.data >>= 1;
+
+        self.p.z = @intFromBool(self.data == 0);
+        self.p.n = 0;
+    }
 }
 
 // EOR a,Y
@@ -1008,6 +1117,49 @@ pub fn op_71(self: *CPU) void {
     self.p.n = get_bit(self.a, 7);
 }
 
+// ADC X,X
+pub fn op_75(self: *CPU) void {
+    if (self.phi == 0) {
+        op0.zi_r(self);
+        return;
+    }
+
+    if (self.timing != 0) {
+        op1.zero_page_indexed(self, .x);
+        return;
+    }
+
+    const res: u16 = @as(u16, self.a) + @as(u16, self.data) + @as(u16, self.p.c);
+    const a = self.a;
+
+    self.a = @truncate(res);
+
+    self.p.c = @intFromBool(res > 0xFF);
+    self.p.z = @intFromBool(self.a == 0);
+    self.p.v = @intFromBool(((self.a ^ a) & (self.a ^ self.data) & 0x80) == 0x80);
+    self.p.n = get_bit(self.a, 7);
+}
+
+// ROR, X,X
+pub fn op_76(self: *CPU) void {
+    if (self.phi == 0) {
+        op0.zi_rmw(self);
+        return;
+    }
+
+    op1.zero_page_indexed(self, .x);
+
+    if (self.timing == 5) {
+        const carry: u1 = @intCast(self.data & 1);
+        self.data >>= 1;
+        self.data += @as(u8, self.p.c) * 0x80;
+
+        self.p.c = carry;
+        self.p.z = @intFromBool(self.data == 0);
+        self.p.n = get_bit(self.data, 7);
+    }
+}
+
 // SEI
 pub fn op_78(self: *CPU) void {
     if (self.phi == 0) {
@@ -1190,6 +1342,48 @@ pub fn op_91(self: *CPU) void {
 
     if (self.timing == 5) {
         self.data = self.a;
+    }
+}
+
+// STY X,X
+pub fn op_94(self: *CPU) void {
+    if (self.phi == 0) {
+        op0.zi_w(self);
+        return;
+    }
+
+    op1.zero_page_indexed(self, .x);
+
+    if (self.timing == 3) {
+        self.data = self.y;
+    }
+}
+
+// STA X,X
+pub fn op_95(self: *CPU) void {
+    if (self.phi == 0) {
+        op0.zi_w(self);
+        return;
+    }
+
+    op1.zero_page_indexed(self, .x);
+
+    if (self.timing == 3) {
+        self.data = self.a;
+    }
+}
+
+// STX X,Y
+pub fn op_96(self: *CPU) void {
+    if (self.phi == 0) {
+        op0.zi_w(self);
+        return;
+    }
+
+    op1.zero_page_indexed(self, .y);
+
+    if (self.timing == 3) {
+        self.data = self.x;
     }
 }
 
@@ -1462,6 +1656,60 @@ pub fn op_B1(self: *CPU) void {
     self.p.n = get_bit(self.a, 7);
 }
 
+// LDY X,X
+pub fn op_B4(self: *CPU) void {
+    if (self.phi == 0) {
+        op0.zi_r(self);
+        return;
+    }
+
+    if (self.timing != 0) {
+        op1.zero_page_indexed(self, .x);
+        return;
+    }
+
+    self.y = self.data;
+
+    self.p.z = @intFromBool(self.y == 0);
+    self.p.n = get_bit(self.y, 7);
+}
+
+// LDA X,X
+pub fn op_B5(self: *CPU) void {
+    if (self.phi == 0) {
+        op0.zi_r(self);
+        return;
+    }
+
+    if (self.timing != 0) {
+        op1.zero_page_indexed(self, .x);
+        return;
+    }
+
+    self.a = self.data;
+
+    self.p.z = @intFromBool(self.a == 0);
+    self.p.n = get_bit(self.a, 7);
+}
+
+// LDX X,Y
+pub fn op_B6(self: *CPU) void {
+    if (self.phi == 0) {
+        op0.zi_r(self);
+        return;
+    }
+
+    if (self.timing != 0) {
+        op1.zero_page_indexed(self, .y);
+        return;
+    }
+
+    self.x = self.data;
+
+    self.p.z = @intFromBool(self.x == 0);
+    self.p.n = get_bit(self.x, 7);
+}
+
 // CLV
 pub fn op_B8(self: *CPU) void {
     if (self.phi == 0) {
@@ -1724,6 +1972,42 @@ pub fn op_D1(self: *CPU) void {
     self.p.c = @intFromBool(self.a >= self.data);
     self.p.z = @intFromBool(self.a == self.data);
     self.p.n = get_bit(res, 7);
+}
+
+// CMP X,X
+pub fn op_D5(self: *CPU) void {
+    if (self.phi == 0) {
+        op0.zi_r(self);
+        return;
+    }
+
+    if (self.timing != 0) {
+        op1.zero_page_indexed(self, .x);
+        return;
+    }
+
+    const res: u8, _ = @subWithOverflow(self.a, self.data);
+
+    self.p.c = @intFromBool(self.a >= self.data);
+    self.p.z = @intFromBool(self.a == self.data);
+    self.p.n = get_bit(res, 7);
+}
+
+// DEC X,X
+pub fn op_D6(self: *CPU) void {
+    if (self.phi == 0) {
+        op0.zi_rmw(self);
+        return;
+    }
+
+    op1.zero_page_indexed(self, .x);
+
+    if (self.timing == 5) {
+        self.data, _ = @subWithOverflow(self.data, 1);
+
+        self.p.z = @intFromBool(self.data == 0);
+        self.p.n = get_bit(self.data, 7);
+    }
 }
 
 // CLD
@@ -2003,6 +2287,50 @@ pub fn op_F1(self: *CPU) void {
     self.p.z = @intFromBool(self.a == 0);
     self.p.v = @intFromBool(((self.a ^ a) & (self.a ^ ~self.data) & 0x80) == 0x80);
     self.p.n = get_bit(self.a, 7);
+}
+
+// SBC X,X
+pub fn op_F5(self: *CPU) void {
+    if (self.phi == 0) {
+        op0.zi_r(self);
+        return;
+    }
+
+    if (self.timing != 0) {
+        op1.zero_page_indexed(self, .x);
+        return;
+    }
+
+    var res: u16 = @intCast(self.a);
+    res, const uf_temp = @subWithOverflow(res, self.data);
+    res, const uf_temp2 = @subWithOverflow(res, ~self.p.c);
+
+    const underflow = uf_temp | uf_temp2;
+
+    const a = self.a;
+    self.a = @truncate(res);
+
+    self.p.c = ~underflow;
+    self.p.z = @intFromBool(self.a == 0);
+    self.p.v = @intFromBool(((self.a ^ a) & (self.a ^ ~self.data) & 0x80) == 0x80);
+    self.p.n = get_bit(self.a, 7);
+}
+
+// INC X,X
+pub fn op_F6(self: *CPU) void {
+    if (self.phi == 0) {
+        op0.zi_rmw(self);
+        return;
+    }
+
+    op1.zero_page_indexed(self, .x);
+
+    if (self.timing == 5) {
+        self.data, _ = @addWithOverflow(self.data, 1);
+
+        self.p.z = @intFromBool(self.data == 0);
+        self.p.n = get_bit(self.data, 7);
+    }
 }
 
 // SED

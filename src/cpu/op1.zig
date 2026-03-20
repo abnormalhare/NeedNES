@@ -89,3 +89,20 @@ pub fn zero_page(self: *CPU) void {
         2 => self.addr = self.data,
     }
 }
+
+/// r: 0 rmw: 5, w: 3
+pub fn zero_page_indexed(self: *CPU, index: Index) void {
+    switch (self.timing) {
+        else => {},
+        2 => self.addr = self.data,
+        3 => {
+            const addr: u8 = @truncate(self.addr);
+            const res: u8, _ = @addWithOverflow(addr, switch (index) {
+                .x => self.x,
+                .y => self.y,
+            });
+
+            self.addr = res;
+        },
+    }
+}
