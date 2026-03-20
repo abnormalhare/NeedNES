@@ -315,6 +315,41 @@ pub fn op_19(self: *CPU) void {
     self.p.n = get_bit(self.a, 7);
 }
 
+// ORA a,X
+pub fn op_1D(self: *CPU) void {
+    if (self.phi == 0) {
+        op0.ai_r(self);
+        return;
+    }
+
+    if (self.timing != 0) {
+        op1.absolute_indexed(self, .x, true);
+        return;
+    }
+
+    self.a |= self.data;
+
+    self.p.z = @intFromBool(self.a == 0);
+    self.p.n = get_bit(self.a, 7);
+}
+
+// LSR a,X
+pub fn op_1E(self: *CPU) void {
+    if (self.phi == 0) {
+        op0.ai_rmw(self);
+        return;
+    }
+
+    op1.absolute_indexed(self, .x, false);
+
+    if (self.timing == 6) {
+        self.data, self.p.c = @shlWithOverflow(self.data, 1);
+
+        self.p.z = @intFromBool(self.data == 0);
+        self.p.n = get_bit(self.data, 7);
+    }
+}
+
 // JSR
 pub fn op_20(self: *CPU) void {
     op0.timing_check(self, 6);
@@ -607,6 +642,43 @@ pub fn op_39(self: *CPU) void {
     self.p.n = get_bit(self.a, 7);
 }
 
+// AND a,X
+pub fn op_3D(self: *CPU) void {
+    if (self.phi == 0) {
+        op0.ai_r(self);
+        return;
+    }
+
+    if (self.timing != 0) {
+        op1.absolute_indexed(self, .x, true);
+        return;
+    }
+
+    self.a &= self.data;
+
+    self.p.z = @intFromBool(self.a == 0);
+    self.p.n = get_bit(self.a, 7);
+}
+
+// ROL a,X
+pub fn op_3E(self: *CPU) void {
+    if (self.phi == 0) {
+        op0.ai_rmw(self);
+        return;
+    }
+
+    op1.absolute_indexed(self, .x, false);
+
+    if (self.timing == 6) {
+        self.data, const carry = @shlWithOverflow(self.data, 1);
+        self.data += @intCast(self.p.c);
+
+        self.p.c = carry;
+        self.p.z = @intFromBool(self.data == 0);
+        self.p.n = get_bit(self.data, 7);
+    }
+}
+
 // RTI
 pub fn op_40(self: *CPU) void {
     op0.timing_check(self, 6);
@@ -864,6 +936,43 @@ pub fn op_59(self: *CPU) void {
 
     self.p.z = @intFromBool(self.a == 0);
     self.p.n = get_bit(self.a, 7);
+}
+
+// EOR a,X
+pub fn op_5D(self: *CPU) void {
+    if (self.phi == 0) {
+        op0.ai_r(self);
+        return;
+    }
+
+    if (self.timing != 0) {
+        op1.absolute_indexed(self, .x, true);
+        return;
+    }
+
+    self.a ^= self.data;
+
+    self.p.z = @intFromBool(self.a == 0);
+    self.p.n = get_bit(self.a, 7);
+}
+
+// LSR a,X
+pub fn op_5E(self: *CPU) void {
+    if (self.phi == 0) {
+        op0.ai_rmw(self);
+        return;
+    }
+
+    op1.absolute_indexed(self, .x, false);
+
+    if (self.timing == 6) {
+        self.p.c = @intCast(self.data & 1);
+
+        self.data >>= 1;
+
+        self.p.z = @intFromBool(self.data == 0);
+        self.p.n = 0;
+    }
 }
 
 // RTS
@@ -1196,6 +1305,49 @@ pub fn op_79(self: *CPU) void {
     self.p.n = get_bit(self.a, 7);
 }
 
+// ADC a,X
+pub fn op_7D(self: *CPU) void {
+    if (self.phi == 0) {
+        op0.ai_r(self);
+        return;
+    }
+
+    if (self.timing != 0) {
+        op1.absolute_indexed(self, .x, true);
+        return;
+    }
+
+    const res: u16 = @as(u16, self.a) + @as(u16, self.data) + @as(u16, self.p.c);
+    const a = self.a;
+
+    self.a = @truncate(res);
+
+    self.p.c = @intFromBool(res > 0xFF);
+    self.p.z = @intFromBool(self.a == 0);
+    self.p.v = @intFromBool(((self.a ^ a) & (self.a ^ self.data) & 0x80) == 0x80);
+    self.p.n = get_bit(self.a, 7);
+}
+
+// ROR a,X
+pub fn op_7E(self: *CPU) void {
+    if (self.phi == 0) {
+        op0.ai_rmw(self);
+        return;
+    }
+
+    op1.absolute_indexed(self, .x, false);
+
+    if (self.timing == 6) {
+        const carry: u1 = @intCast(self.data & 1);
+        self.data >>= 1;
+        self.data += @as(u8, self.p.c) * 0x80;
+
+        self.p.c = carry;
+        self.p.z = @intFromBool(self.data == 0);
+        self.p.n = get_bit(self.data, 7);
+    }
+}
+
 // STA (d,X)
 pub fn op_81(self: *CPU) void {
     if (self.phi == 0) {
@@ -1411,6 +1563,20 @@ pub fn op_99(self: *CPU) void {
     }
 
     op1.absolute_indexed(self, .y, false);
+
+    if (self.timing == 4) {
+        self.data = self.a;
+    }
+}
+
+// STA a,X
+pub fn op_9D(self: *CPU) void {
+    if (self.phi == 0) {
+        op0.ai_w(self);
+        return;
+    }
+
+    op1.absolute_indexed(self, .x, false);
 
     if (self.timing == 4) {
         self.data = self.a;
@@ -1757,6 +1923,60 @@ pub fn op_BA(self: *CPU) void {
     }
 }
 
+// LDY a,X
+pub fn op_BC(self: *CPU) void {
+    if (self.phi == 0) {
+        op0.ai_r(self);
+        return;
+    }
+
+    if (self.timing != 0) {
+        op1.absolute_indexed(self, .x, true);
+        return;
+    }
+
+    self.y = self.data;
+
+    self.p.z = @intFromBool(self.y == 0);
+    self.p.n = get_bit(self.y, 7);
+}
+
+// LDA a,X
+pub fn op_BD(self: *CPU) void {
+    if (self.phi == 0) {
+        op0.ai_r(self);
+        return;
+    }
+
+    if (self.timing != 0) {
+        op1.absolute_indexed(self, .x, true);
+        return;
+    }
+
+    self.a = self.data;
+
+    self.p.z = @intFromBool(self.a == 0);
+    self.p.n = get_bit(self.a, 7);
+}
+
+// LDX a,Y
+pub fn op_BE(self: *CPU) void {
+    if (self.phi == 0) {
+        op0.ai_r(self);
+        return;
+    }
+
+    if (self.timing != 0) {
+        op1.absolute_indexed(self, .y, true);
+        return;
+    }
+
+    self.x = self.data;
+
+    self.p.z = @intFromBool(self.x == 0);
+    self.p.n = get_bit(self.x, 7);
+}
+
 // CPY #X
 pub fn op_C0(self: *CPU) void {
     if (self.phi == 0) {
@@ -2040,6 +2260,42 @@ pub fn op_D9(self: *CPU) void {
     self.p.c = @intFromBool(self.a >= self.data);
     self.p.z = @intFromBool(self.a == self.data);
     self.p.n = get_bit(res, 7);
+}
+
+// CMP a,X
+pub fn op_DD(self: *CPU) void {
+    if (self.phi == 0) {
+        op0.ai_r(self);
+        return;
+    }
+
+    if (self.timing != 0) {
+        op1.absolute_indexed(self, .x, true);
+        return;
+    }
+
+    const res: u8, _ = @subWithOverflow(self.a, self.data);
+
+    self.p.c = @intFromBool(self.a >= self.data);
+    self.p.z = @intFromBool(self.a == self.data);
+    self.p.n = get_bit(res, 7);
+}
+
+// DEC a,X
+pub fn op_DE(self: *CPU) void {
+    if (self.phi == 0) {
+        op0.ai_rmw(self);
+        return;
+    }
+
+    op1.absolute_indexed(self, .x, false);
+
+    if (self.timing == 6) {
+        self.data, _ = @subWithOverflow(self.data, 1);
+
+        self.p.z = @intFromBool(self.data == 0);
+        self.p.n = get_bit(self.data, 7);
+    }
 }
 
 // CPX #X
@@ -2371,4 +2627,48 @@ pub fn op_F9(self: *CPU) void {
     self.p.z = @intFromBool(self.a == 0);
     self.p.v = @intFromBool(((self.a ^ a) & (self.a ^ ~self.data) & 0x80) == 0x80);
     self.p.n = get_bit(self.a, 7);
+}
+
+// SBC a,X
+pub fn op_FD(self: *CPU) void {
+    if (self.phi == 0) {
+        op0.ai_r(self);
+        return;
+    }
+
+    if (self.timing != 0) {
+        op1.absolute_indexed(self, .x, true);
+        return;
+    }
+
+    var res: u16 = @intCast(self.a);
+    res, const uf_temp = @subWithOverflow(res, self.data);
+    res, const uf_temp2 = @subWithOverflow(res, ~self.p.c);
+
+    const underflow = uf_temp | uf_temp2;
+
+    const a = self.a;
+    self.a = @truncate(res);
+
+    self.p.c = ~underflow;
+    self.p.z = @intFromBool(self.a == 0);
+    self.p.v = @intFromBool(((self.a ^ a) & (self.a ^ ~self.data) & 0x80) == 0x80);
+    self.p.n = get_bit(self.a, 7);
+}
+
+// INC a,X
+pub fn op_FE(self: *CPU) void {
+    if (self.phi == 0) {
+        op0.ai_rmw(self);
+        return;
+    }
+
+    op1.absolute_indexed(self, .x, false);
+
+    if (self.timing == 6) {
+        self.data, _ = @addWithOverflow(self.data, 1);
+
+        self.p.z = @intFromBool(self.data == 0);
+        self.p.n = get_bit(self.data, 7);
+    }
 }
