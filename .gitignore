@@ -6,4 +6,5 @@ zig-out/
 /build-*/
 /docgen_tmp/
 /tests
+/palettes
 debug.txt
