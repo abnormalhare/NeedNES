@@ -37,8 +37,12 @@ pub fn process_events() ProcessResult {
     return ret;
 }
 
-pub fn render(render_state: *RenderState, filename: *?[:0]const u8) !void {
+pub fn render(alloc: std.mem.Allocator, render_state: *RenderState, filename: *?[:0]const u8) !?RenderState {
+    if (render_state.window_type != .main) return null;
+
     zgui.backend.newFrame(WINDOW_WIDTH, WINDOW_HEIGHT);
+
+    var ret: ?RenderState = null;
 
     if (zgui.beginMainMenuBar()) {
         defer zgui.endMainMenuBar();
@@ -50,8 +54,22 @@ pub fn render(render_state: *RenderState, filename: *?[:0]const u8) !void {
                 filename.* = try nfd.openFileDialog("nes", ".");
             }
         }
+
+        if (zgui.beginMenu("View", true)) {
+            defer zgui.endMenu();
+
+            if (zgui.menuItem("Pattern Table", .{ .shortcut = "Ctrl+Shift+P" })) {
+                var x: c_int = undefined;
+                var y: c_int = undefined;
+
+                render_state.window.getPosition(&x, &y);
+                ret = try SDL.create_window(alloc, "Pattern Table", x + 50, y + 50, .pattern_table);
+            }
+        }
     }
 
     zgui.render();
     zgui.backend.draw(render_state.renderer);
+
+    return ret;
 }

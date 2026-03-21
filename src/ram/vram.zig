@@ -2,7 +2,7 @@ const std = @import("std");
 
 const ReadWrite = @import("../global.zig").ReadWrite;
 
-pub const RAM = struct {
+pub const VRAM = struct {
     // externally manipulated
     addr: u11,
     rw: ReadWrite,
@@ -13,7 +13,7 @@ pub const RAM = struct {
     data: [0x800]u8,
 
     // this unfortunately relies on being called AFTER CPU because it is technically activated between PHI1 and PHI2.
-    pub fn tick(self: *RAM) void {
+    pub fn tick(self: *VRAM) void {
         if (self.phi != 0 or self.chip_enable == 0) return;
 
         switch (self.rw) {
@@ -22,8 +22,14 @@ pub const RAM = struct {
         }
     }
 
-    pub fn new() RAM {
-        const self: RAM = .{
+    pub fn to_next_state(self: *VRAM) void {
+        const next = self.next_state;
+
+        self.data = next.data;
+    }
+
+    pub fn new() VRAM {
+        const self: VRAM = .{
             .data = [_]u8{0} ** 0x800,
             .addr = 0,
             .rw = .write,

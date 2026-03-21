@@ -31,7 +31,7 @@ pub fn call_instruction(instr: u8, cpu: *CPU) void {
     instructions[instr](cpu);
 }
 
-var render_state: RenderState = undefined;
+var render_states: std.ArrayList(RenderState) = undefined;
 var motherboard: Motherboard = undefined;
 var app_state: AppState = .Idle;
 var rom_to_load: ?[:0]const u8 = null;
@@ -48,9 +48,13 @@ fn run_idle(alloc: std.mem.Allocator) !void {
     while (true) {
         _ = ImGui.process_events();
 
-        try SDL.back_render(&render_state);
-        try ImGui.render(&render_state, &rom_to_load);
-        try SDL.render(alloc, &render_state);
+        for (render_states.items) |*state| {
+            try SDL.back_render(state);
+            if (try ImGui.render(alloc, state, &rom_to_load)) |new_state| {
+                try render_states.append(alloc, new_state);
+            }
+            try SDL.render(alloc, state);
+        }
 
         if (rom_to_load) |rom| {
             _ = rom;
@@ -85,10 +89,14 @@ fn run_running(alloc: std.mem.Allocator) !void {
 
         const temp = rom_to_load.?;
 
-        try SDL.back_render(&render_state);
-        try ImGui.render(&render_state, &rom_to_load);
-        try motherboard.render(alloc, &render_state);
-        try SDL.render(alloc, &render_state);
+        for (render_states.items) |*state| {
+            try SDL.back_render(state);
+            if (try ImGui.render(alloc, state, &rom_to_load)) |new_state| {
+                try render_states.append(alloc, new_state);
+            }
+            try motherboard.render(alloc, state);
+            try SDL.render(alloc, state);
+        }
 
         if (rom_to_load) |rom| {
             if (!std.mem.eql(u8, temp, rom)) {
@@ -124,13 +132,15 @@ pub fn main() !void {
 
     const allocator = gpa.allocator();
 
-    render_state = try SDL.init(allocator);
-    defer SDL.deinit(allocator, &render_state);
+    render_states = try std.ArrayList(RenderState).initCapacity(allocator, 4);
 
-    ImGui.init(allocator, &render_state);
+    try render_states.append(allocator, try SDL.init(allocator));
+    defer SDL.deinit(allocator, &render_states.items[0]);
+
+    ImGui.init(allocator, &render_states.items[0]);
     defer ImGui.deinit();
 
-    motherboard = try Motherboard.new(&render_state, call_instruction);
+    motherboard = try Motherboard.new(&render_states.items[0], call_instruction);
     defer if (motherboard.init) motherboard.deinit(allocator);
 
     if (try process_args(allocator)) |filename| {

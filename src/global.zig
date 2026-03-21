@@ -56,12 +56,16 @@ pub const MapperInfo = struct {
     device_code: u8,
 };
 
+pub const WindowType = enum { main, pattern_table };
+
 pub const RenderState = struct {
+    window_type: WindowType,
     window: *zsdl.Window,
     renderer: *zsdl.Renderer,
     debug_font: *zsdl_ttf.Font,
 
     surfaces: std.ArrayList(*zsdl.Surface),
+    textures: std.ArrayList(*zsdl.Texture),
 };
 
 pub const TickType = enum {
@@ -77,8 +81,8 @@ pub const ProcessResult = enum {
     pause_type,
 };
 
-pub const WINDOW_WIDTH: u16 = 640;
-pub const WINDOW_HEIGHT: u16 = 640;
+pub const WINDOW_WIDTH: u16 = 512;
+pub const WINDOW_HEIGHT: u16 = 480;
 
 pub const BLACK: zsdl.Color = .{ .r = 0x00, .g = 0x00, .b = 0x00, .a = 0xFF };
 pub const WHITE: zsdl.Color = .{ .r = 0xFF, .g = 0xFF, .b = 0xFF, .a = 0xFF };

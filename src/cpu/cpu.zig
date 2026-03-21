@@ -7,6 +7,7 @@ const ReadWrite = @import("../global.zig").ReadWrite;
 const get_bit = @import("../global.zig").get_bit;
 
 const Instructions = @import("instructions.zig");
+const Interrupts = @import("interrupts.zig");
 
 const Flags = packed struct {
     c: u1,
@@ -97,10 +98,12 @@ pub const CPU = struct {
         self.s, _ = @subWithOverflow(self.s, 3);
         self.p.i = 1;
 
-        // self.pc = 0xFFFC;
-        // self.ir = 0x6C;
-        self.timing = 1;
-        self.pc = 0xC000;
+        self.ir = 0;
+        self.timing = 0;
+        self.phi = 0;
+
+        Interrupts.set_interrupt(.rst);
+        self.halt = 0;
     }
 
     pub fn power(self: *CPU) void {
@@ -110,13 +113,23 @@ pub const CPU = struct {
         self.x = 0;
         self.y = 0;
 
-        self.s = 0xFD;
+        self.s = 0;
 
         self.p.c = 0;
         self.p.z = 0;
         self.p.d = 0;
         self.p.v = 0;
         self.p.n = 0;
+    }
+
+    pub fn irq_callback(self: *CPU) void {
+        self.ir = 0;
+        Interrupts.set_interrupt(.irq);
+    }
+
+    pub fn nmi_callback(self: *CPU) void {
+        self.ir = 0;
+        Interrupts.set_interrupt(.nmi);
     }
 
     // handling
@@ -157,6 +170,11 @@ pub const CPU = struct {
     }
 
     pub fn read_ir(self: *CPU) void {
+        if (Interrupts.get_interrupt() != null) {
+            self.ir = 0;
+            return;
+        }
+
         if (self.phi == 0) {
             self.read_pc();
         } else {
@@ -170,15 +188,10 @@ pub const CPU = struct {
 
     pub fn write_stack(self: *CPU) void {
         self.write();
-        self.s -= 1;
+        self.s, _ = @subWithOverflow(self.s, 1);
     }
 
     // emulation
-
-    fn to_next_state(self: *CPU) void {
-        self.phi, const temp = @addWithOverflow(self.phi, 1);
-        self.timing, _ = @addWithOverflow(self.timing, temp);
-    }
 
     pub fn tick(self: *CPU) void {
         if (self.halt == 1) return;
@@ -187,7 +200,9 @@ pub const CPU = struct {
             1 => self.read_ir(),
             else => self.call_instruction(self.ir, self),
         }
-        self.to_next_state();
+
+        self.phi, const temp = @addWithOverflow(self.phi, 1);
+        self.timing, _ = @addWithOverflow(self.timing, temp);
     }
 
     pub fn new(render_state: *RenderState, call_instruction: *const fn (u8, *CPU) void) CPU {

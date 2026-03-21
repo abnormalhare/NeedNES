@@ -1,6 +1,7 @@
 const std = @import("std");
 
 const CPU = @import("cpu.zig").CPU;
+const Interrupts = @import("interrupts.zig");
 
 const get_bits = @import("../global.zig").get_bits;
 const get_bit = @import("../global.zig").get_bit;
@@ -65,37 +66,7 @@ pub fn op_branch(self: *CPU, operation: bool) void {
 
 // BRK
 pub fn op_00(self: *CPU) void {
-    op0.timing_check(self, 7);
-
-    switch (self.timing) {
-        else => {},
-        2 => if (self.phi == 0) self.read_pc() else {
-            self.addr = 0x100 + @as(u16, self.s);
-            self.data = @truncate(self.pc >> 8);
-        },
-        3 => if (self.phi == 0) self.write_stack() else {
-            self.addr = 0x100 + @as(u16, self.s);
-            self.data = @truncate(self.pc);
-        },
-        4 => if (self.phi == 0) self.write_stack() else {
-            self.addr = 0x100 + @as(u16, self.s);
-            self.p.i = 1;
-            self.p.b = 1;
-            self.data = self.p.to_num();
-            self.p.b = 0;
-        },
-        5 => if (self.phi == 0) self.write_stack() else {
-            self.addr = 0xFFFE;
-        },
-        6 => if (self.phi == 0) self.read() else {
-            self.adl = self.data;
-            self.addr += 1;
-        },
-        0 => if (self.phi == 0) self.read() else {
-            self.pc = self.adl;
-            self.pc += @as(u16, self.data) << 8;
-        },
-    }
+    Interrupts.interrupt(self);
 }
 
 // ORA (d,X)

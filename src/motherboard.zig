@@ -3,6 +3,7 @@ const std = @import("std");
 const zsdl = @import("zsdl2");
 
 const CPU = @import("cpu/cpu.zig").CPU;
+const PPU = @import("ppu/ppu.zig").PPU;
 const RAM = @import("ram/ram.zig").RAM;
 
 const Mapper = @import("mapper/mapper.zig").Mapper;
@@ -12,6 +13,7 @@ const RenderState = @import("global.zig").RenderState;
 const TickType = @import("global.zig").TickType;
 const interpret_nes_header = @import("global.zig").interpret_nes_header;
 const WHITE = @import("global.zig").WHITE;
+const get_bits = @import("global.zig").get_bits;
 
 const RomLoadError = error{NotNESROM};
 
@@ -26,6 +28,7 @@ pub const Motherboard = struct {
     tick_type: TickType,
 
     cpu: CPU,
+    ppu: PPU,
     ram: RAM,
     mapper: Mapper,
 
@@ -52,11 +55,26 @@ pub const Motherboard = struct {
             _ = self.mapper.write_cpu(self.cpu.addr, self.cpu.data);
         }
 
-        self.ram.rw = self.cpu.rw;
-        self.ram.addr = @truncate(self.cpu.addr);
-        self.ram.chip_enable = @intFromBool((self.cpu.addr >> 12) < 4); // technically !(A12 | A13 | A14 | A15)
-        if (self.cpu.rw == .write) {
-            self.ram.latch = self.cpu.data;
+        if (self.cpu.addr >= 0x0000 and self.cpu.addr < 0x2000) {
+            self.ram.chip_enable = 1;
+            self.ram.rw = self.cpu.rw;
+            self.ram.addr = @truncate(self.cpu.addr);
+            if (self.cpu.rw == .write) {
+                self.ram.latch = self.cpu.data;
+            }
+        } else {
+            self.ram.chip_enable = 0;
+        }
+
+        if (self.cpu.addr >= 0x2000 and self.cpu.addr < 0x4000) {
+            self.ppu.chip_enable = 1;
+            self.ppu.rw = self.cpu.rw;
+            self.ppu.cpu_addr = @truncate(self.cpu.addr);
+            if (self.cpu.rw == .write) {
+                self.ppu.cpu_data = self.cpu.data;
+            }
+        } else {
+            self.ram.chip_enable = 0;
         }
     }
 
@@ -84,10 +102,11 @@ pub const Motherboard = struct {
     pub fn tick(self: *Motherboard, alloc: std.mem.Allocator) !void {
         if (self.paused or !self.running) return;
 
-        if (self.cpu.timing == 1 and self.cpu.phi == 0) {
-            try self.generate_debug_file(alloc);
-            self.old_pc = self.cpu.pc;
-        }
+        _ = alloc;
+        // if (self.cpu.timing == 1 and self.cpu.phi == 0) {
+        //     try self.generate_debug_file(alloc);
+        //     self.old_pc = self.cpu.pc;
+        // }
 
         self.cpu.tick();
         self.subtick_update();
@@ -132,7 +151,7 @@ pub const Motherboard = struct {
         try self.file.writeAll(list.items);
     }
 
-    pub fn render(self: *Motherboard, alloc: std.mem.Allocator, render_state: *RenderState) !void {
+    pub fn render_main_text(self: *Motherboard, alloc: std.mem.Allocator, render_state: *RenderState) !void {
         const debug_text = try self.generate_debug_text(alloc);
         defer alloc.free(debug_text);
 
@@ -150,6 +169,24 @@ pub const Motherboard = struct {
 
         text_texture.destroy();
         text_surface.free();
+    }
+
+    pub fn render_main(self: *Motherboard, alloc: std.mem.Allocator, render_state: *RenderState) !void {
+        try self.render_main_text(alloc, render_state);
+        try self.ppu.render(alloc, render_state);
+    }
+
+    pub fn render_pattern_table(self: *Motherboard, alloc: std.mem.Allocator, render_state: *RenderState) !void {
+        _ = self;
+        _ = alloc;
+        _ = render_state;
+    }
+
+    pub fn render(self: *Motherboard, alloc: std.mem.Allocator, render_state: *RenderState) !void {
+        switch (render_state.window_type) {
+            .main => try self.render_main(alloc, render_state),
+            .pattern_table => try self.render_pattern_table(alloc, render_state),
+        }
     }
 
     pub fn load_rom(self: *Motherboard, alloc: std.mem.Allocator, filename: [:0]const u8) !void {
@@ -184,9 +221,10 @@ pub const Motherboard = struct {
 
             .power_btn = 0,
             .reset_btn = 0,
-            .tick_type = .instr,
+            .tick_type = .phase,
 
             .cpu = CPU.new(render_state, call_instruction),
+            .ppu = PPU.new(),
             .ram = RAM.new(),
             .mapper = undefined,
 
